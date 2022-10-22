@@ -2,9 +2,10 @@ extern crate bcrypt;
 extern crate mysql;
 
 use super::utils;
+use super::error;
 use mysql::*;
 use mysql::prelude::*;
-
+use crate::error::ServiceError;
 
 
 #[derive(Debug, PartialEq, Eq)]
@@ -24,18 +25,18 @@ impl Conn{
         creat_table(&mut mysql).expect("creat_table error");
         Ok(Conn{mysql})
     }
-    pub fn login(&mut self,id:u32,password:&str)->std::result::Result<bool,String>{
+    pub fn login(&mut self,id:u32,password:&str)->std::result::Result<bool,ServiceError>{
         match self.select(id) {
             Some(user) => {
                 match utils::verify_password(password,&user.password) {
                     Ok(result)=> Ok(result),
-                    Err(e)=> Err(format!("verify_password error:{}",e)),
+                    Err(e)=> Err(ServiceError::BadRequest(format!("verify_password error:{}", e))),
                 }
             }
-            None => Err("id is not exist".to_string()),
+            None => Err(ServiceError::BadRequest(format!("id is not exist"))),
         }
     }
-    pub fn remove(&mut self,id:u32)->Result<u64>{
+    pub fn remove(&mut self,id:u32)->std::result::Result<u64,ServiceError>{
         let sql = format!("delete from id_password where id = {} ",id);
         let result = sql.run(&mut self.mysql);
         match result{
@@ -43,20 +44,20 @@ impl Conn{
                 println!("remove success");
                 Ok(res.affected_rows())
             }
-            Err(e)=>{
+            Err(_)=>{
                 println!("remove failed");
-                Err(e)
+                Err(ServiceError::BadRequest(format!("remove error")))
             }
         }
     }
     /// return your id
-    pub fn registered(&mut self, password:&str) ->Result<u32>{
+    pub fn insert(&mut self,password:&str)->Result<u32>{
         let hash_pwd = utils::hash_password(password).unwrap();
         let id = utils::generate_id();
         let sql = format!("insert into id_password(id,password) values({},'{}')",id,hash_pwd);
         let result = sql.run(&mut self.mysql);
         match result{
-            Ok(res) =>{
+            Ok(_res) =>{
                 println!("insert success");
                 Ok(id)
             }
